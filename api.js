@@ -151,8 +151,15 @@ const fetchDataAndStore2 = async () => {
 };
 
 // Schedule the task to run every day at 1:00 AM IST
-cron.schedule("*/2 * * * *", () => {
+cron.schedule('30 19 * * *', () => {
   console.log("Running fetchDataAndStore at 1:00 AM IST");
+  fetchDataAndStore();
+  fetchDataAndStore2();
+});
+
+// Schedule the task to run every day at 6:00 PM IST
+cron.schedule('30 12 * * *', () => {
+  console.log("Running fetchDataAndStore at 6:00 PM IST");
   fetchDataAndStore();
   fetchDataAndStore2();
 });
