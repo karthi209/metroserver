@@ -86,7 +86,7 @@ jobs:
                     -e DB_NAME="${{ secrets.DB_NAME }}" \
                     -e API_ALLTICKETCOUNT="${{ secrets.API_ALLTICKETCOUNT }}" \
                     -e API_STATIONDATA="${{ secrets.API_STATIONDATA }}" \
-                    -e API_API_HOURLYDATA="${{ secrets.API_HOURLYDATA}}" \
+                    -e API_HOURLYDATA="${{ secrets.API_HOURLYDATA}}" \
                     ghcr.io/karthi209/metroserver/api:${{ env.VERSION }}
                 docker update --restart unless-stopped metroserver-api 
             EOF
