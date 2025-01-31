@@ -112,8 +112,6 @@ const fetchDataHourly = async () => {
   }
 };
 
-
-
 // Function to save data to the database
 const saveToDatabase = async (totalTickets, stationsData, date, hourlyData) => {
   try {
@@ -175,7 +173,7 @@ app.get("/tickets", async (req, res) => {
 });
 
 // Schedule the data fetching and saving to run once every day at midnight (3AM IST)
-cron.schedule('30 15 * * *', async () => {  // Adjusted to 3:30 PM UTC (midnight IST)
+cron.schedule('*/2 * * * *', async () => {  // Adjusted to 3:30 PM UTC (midnight IST)
   console.log('Running scheduled job to fetch and save data');
   try {
     const totalTicketsData = await fetchDataAllTickets();
