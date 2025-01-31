@@ -93,11 +93,11 @@ jobs:
 
         - name: Check if container is running
           run: |
-            echo "Checking if frontend container is running on remote server..."
+            echo "Checking if container is running on remote server..."
             TIMEOUT=120  # 2 minutes in seconds
             START_TIME=$(date +%s)
             
-            until sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_IP }} "docker ps --filter 'name= metroserver-api' --filter 'status=running' --format '{{.Names}}' | grep -w ' metroserver-api'"; do
+            until sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_IP }} "docker ps --filter 'name=metroserver-api' --filter 'status=running' --format '{{.Names}}' | grep -w 'metroserver-api'"; do
                 echo "Container not found or not running yet. Retrying in 5 seconds..."
                 sleep 5
                 
