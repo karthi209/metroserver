@@ -1,11 +1,17 @@
-require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
 const { Pool } = require("pg");
 const cron = require("node-cron");  // Scheduling library
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
+
+if (process.env.NODE_ENV != 'production') {
+  const path = require('path');
+  const envPath = path.resolve(__dirname, '.env');
+  console.log(`Loading .env file from: ${envPath}`);
+  require('dotenv').config({ path: envPath });
+}
 
 // PostgreSQL Database Connection
 const pool = new Pool({

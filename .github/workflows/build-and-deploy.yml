@@ -1,0 +1,112 @@
+name: build-n-deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+  attestations: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          clean: true
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read current versions from VERSION.txt
+        run: |
+          VERSION=$(grep "img_version=" VERSION.txt | cut -d '=' -f 2)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Increment version
+        run: |
+          VERSION_NO_V=$(echo ${{ env.VERSION }} | sed 's/^v//')  # Remove leading 'v' if present
+          NEW_VERSION="v$(echo $VERSION_NO_V | cut -d'.' -f1).$(echo $VERSION_NO_V | cut -d'.' -f2).$(($(echo $VERSION_NO_V | cut -d'.' -f3) + 1))"
+          echo "New frontend version: $NEW_VERSION"
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
+      # Manually build and push image
+      - name: Build and push image
+        run: |
+          docker build -t ghcr.io/karthi209/metroserver/api:${{ env.NEW_VERSION }} -f Dockerfile .
+          docker push ghcr.io/karthi209/metroserver/api:${{ env.NEW_VERSION }}
+
+      - name: Update version in VERSION.txt
+        run: |
+          sed -i "s/img_version=.*/img_version=${{ env.NEW_VERSION }}/" VERSION.txt
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add VERSION.txt
+          git commit -m "Update img version"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.ref }}
+    
+  deploy_frontend:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+        - name: Checkout repository
+          uses: actions/checkout@v2
+          with:
+            clean: true
+
+        - name: Pull latest changes from repository
+          run: git pull origin HEAD
+
+        - name: Read version from VERSION.txt
+          run: |
+            VERSION=$(grep "img_version=" VERSION.txt | cut -d '=' -f 2)
+            echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+        - name: Deploy docker container to production server using SSH with password
+          run: |
+            sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_IP }} << 'EOF'
+                docker stop metroserver-api || true
+                docker rm metroserver-api || true
+                docker rmi $(docker images ghcr.io/karthi209/metroserver/api -q) || true
+                docker pull ghcr.io/karthi209/metroserver/api:${{ env.VERSION }}
+                docker run -d \
+                    --name metroserver-api \
+                    -p 3001:3001 \
+                    -e DB_USER="${{ secrets.DB_USER }}" \
+                    -e DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+                    -e DB_HOST="${{ secrets.DB_HOST }}" \
+                    -e DB_PORT="${{ secrets.DB_PORT }}" \
+                    -e DB_NAME="${{ secrets.DB_NAME }}" \
+                    -e API_ALLTICKETCOUNT="${{ secrets.API_ALLTICKETCOUNT }}" \
+                    -e API_STATIONDATA="${{ secrets.API_STATIONDATA }}" \
+                    -e API_API_HOURLYDATA="${{ secrets.API_HOURLYDATA}}" \
+                    ghcr.io/karthi209/metroserver/api:${{ env.VERSION }}
+                docker update --restart unless-stopped metroserver-api 
+            EOF
+
+        - name: Check if container is running
+          run: |
+            echo "Checking if frontend container is running on remote server..."
+            TIMEOUT=120  # 2 minutes in seconds
+            START_TIME=$(date +%s)
+            
+            until sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_IP }} "docker ps --filter 'name= metroserver-api' --filter 'status=running' --format '{{.Names}}' | grep -w ' metroserver-api'"; do
+                echo "Container not found or not running yet. Retrying in 5 seconds..."
+                sleep 5
+                
+                CURRENT_TIME=$(date +%s)
+                ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
+                
+                if [ $ELAPSED_TIME -ge $TIMEOUT ]; then
+                echo "Container did not start within 2 minutes. Exiting."
+                exit 1  # Exit with an error code
+                fi
+            done
+            echo "metroserver-api container is running!"
